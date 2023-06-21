@@ -69,15 +69,14 @@ HAVING COUNT(*) > (
 --para la provincia con nombre “Washington”.
 
 SELECT YEAR(p.ModifiedDate), MONTH(p.ModifiedDate)
-FROM Person.Person p, Person.BusinessEntityAddress bea
-WHERE p.BusinessEntityID = bea.BusinessEntityID
-AND p.PersonType = 'EM'
-AND bea.AddressID IN (
-    SELECT bea2.AddressID
-    FROM Person.BusinessEntityAddress bea2, Person.Address a2, Person.StateProvince st
-    WHERE bea2.AddressID = a2.AddressID
-    AND a2.StateProvinceID = st.StateProvinceID
-    AND st.Name = 'Washington'
+FROM Person.Person p
+WHERE p.PersonType = 'EM'
+AND p.ModifiedDate IN 
+(
+    SELECT a.ModifiedDate
+    FROM Person.Address a, Person.StateProvince sp 
+    WHERE a.StateProvinceID = sp.StateProvinceID
+    AND sp.Name = 'Washington'
 )
 
 -- 8. Determinar si existen empleados y clientes con mismo Id, usando subconsultas
@@ -102,21 +101,38 @@ WHERE e.BusinessEntityID IN (
 
 -- 9. Mostrar los años de las ventas registradas y de las compras registradas. Identificar para cada año, si corresponde a ventas ó a compras.
 
+SELECT YEAR(poh.OrderDate) anio, COUNT(poh.PurchaseOrderID) AS total, tipo = 'compra'
+FROM AdventureWorks2019.Purchasing.PurchaseOrderHeader poh
+GROUP BY YEAR(poh.OrderDate) 
+UNION ALL
+SELECT YEAR(soh.OrderDate) AS anio, COUNT(soh.SalesOrderID) AS total, tipo = 'venta'
+FROM AdventureWorks2019.Sales.SalesOrderHeader soh
+GROUP BY YEAR(soh.OrderDate)
 
 -- 10. Para la anterior consulta, ordenarla por año descendente
 
+SELECT anio, total, tipo 
+FROM(
+SELECT YEAR(poh.OrderDate) anio, COUNT(poh.PurchaseOrderID) AS total, tipo = 'compra'
+FROM AdventureWorks2019.Purchasing.PurchaseOrderHeader poh
+GROUP BY YEAR(poh.OrderDate) 
+UNION ALL
+SELECT YEAR(soh.OrderDate) AS anio, COUNT(soh.SalesOrderID) AS total, tipo = 'venta'
+FROM AdventureWorks2019.Sales.SalesOrderHeader soh
+GROUP BY YEAR(soh.OrderDate)
+) as helper
+ORDER BY total DESC
 
 -- 11. Para cada venta, encontrar la denominación del producto de mayor precio total (precio x cantidad) de su propia orden.
 
---- CORREGIR, esto no funciona, devuelve multiples SalesOrderID
-SELECT p.ProductID, p.Name, sod.SalesOrderID
-FROM Sales.SalesOrderDetail sod, Production.Product p
-WHERE sod.ProductID = p.ProductID
-AND sod.UnitPrice = (
-    SELECT MAX(sod2.UnitPrice)
-    FROM Sales.SalesOrderDetail sod2
-    WHERE sod2.SalesOrderID = sod.SalesOrderID
-) 
+SELECT sod.SalesOrderID, p.Name
+FROM AdventureWorks2019.Sales.SalesOrderDetail sod 
+LEFT JOIN Production.Product p 
+ON sod.ProductID = p.ProductID 
+WHERE LineTotal = (SELECT MAX(LineTotal)
+					FROM AdventureWorks2019.Sales.SalesOrderDetail sod2 
+					GROUP BY SalesOrderID 
+					HAVING sod2.SalesOrderID = sod.SalesOrderID)
 
 
 -- 12. Encontrar el nombre de los productos que no pertenezcan a la subcategoría “Wheels”. Usar EXISTS.
@@ -135,7 +151,7 @@ WHERE EXISTS (
 
 SELECT p.ProductSubcategoryID , p.Name , p.ListPrice 	
 FROM Production.Product p
-WHERE p.ListPrice IN (
+WHERE p.ListPrice >= ANY (
     SELECT MAX(p.ListPrice)
 	FROM Production.Product p
 	GROUP BY p.ProductSubcategoryID) 
@@ -145,7 +161,5 @@ WHERE p.ListPrice IN (
 SELECT p.FirstName, p.LastName
 FROM HumanResources.Employee e , Person.Person p 
 WHERE e.BusinessEntityID = p.BusinessEntityID
-AND e.BusinessEntityID IN (
-    SELECT e.BusinessEntityID 
-	FROM HumanResources.Employee e
-	WHERE e.JobTitle = 'Sales Representative')
+AND e.BusinessEntityID IN (SELECT soh.SalesPersonID 
+							FROM AdventureWorks2019.Sales.SalesOrderHeader soh)
