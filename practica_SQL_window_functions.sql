@@ -52,10 +52,16 @@ FROM helper
 
 -- 6. Obtener para cada cliente y para cada orden: el id del cliente, el id de la orden, la fecha de la orden, la cantidad de días desde la orden anterior y la cantidad de días hasta la próxima orden. Pista usar: DATEDIFF.
 
+WITH helper AS (
 SELECT CustomerID, OrderDate, SalesOrderID,
 LAG(CAST(OrderDate as DATE)) OVER(PARTITION BY CustomerID ORDER BY SalesOrderID) As PrevOrderDate,
   LEAD(CAST(OrderDate as DATE)) OVER(PARTITION BY CustomerID ORDER BY SalesOrderID) As NextOrderDate
 FROM Sales.SalesOrderHeader
+)
+SELECT *,
+DATEDIFF(day, PrevOrder, OrderDate) as PrevDif,
+DATEDIFF(day, OrderDate, NextOrder) as NextDif
+FROM helper
 
 -- 7. Obtener para cada trimestre de cada año el total de ventas comparado con el total del año anterior. Pista 1) MONTH(OrderDate)/4 + 1 nos da el trimestre. 2) Usar CTE
 
