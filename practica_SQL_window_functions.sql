@@ -63,7 +63,8 @@ DATEDIFF(day, PrevOrder, OrderDate) as PrevDif,
 DATEDIFF(day, OrderDate, NextOrder) as NextDif
 FROM helper
 
--- 7. Obtener para cada trimestre de cada año el total de ventas comparado con el total del año anterior. Pista 1) MONTH(OrderDate)/4 + 1 nos da el trimestre. 2) Usar CTE
+-- 7. Obtener para cada trimestre de cada año el total de ventas comparado con el total del año anterior. 
+-- Pista 1) MONTH(OrderDate)/4 + 1 nos da el trimestre. 2) Usar CTE
 
 WITH helper1 AS
 (
@@ -98,11 +99,15 @@ AND orden_total < (SELECT COUNT(*) FROM Sales.SalesOrderHeader)
 
 -- 9. Obtener para cada mes del año 2013 la cantidad total de órdenes y la mediana, además el percentil.
 
-WITH helper AS (
-SELECT MONTH(OrderDate) as mes_orden, YEAR (OrderDate) as anio_orden, COUNT(*) AS total_ordenes
-FROM Sales.SalesOrderHeader
-WHERE YEAR(OrderDate) = 2013
-GROUP BY MONTH(OrderDate), YEAR (OrderDate))
-SELECT *,
-PERCENT_RANK() OVER(ORDER BY total_ordenes) as "Percent Rank"
-FROM helper
+WITH Aux3 as
+(
+SELECT month(soh.OrderDate) as mes, soh.TotalDue, soh.OrderDate,
+		PERCENTILE_DISC(0.5) WITHIN GROUP(ORDER BY soh.TotalDue)
+                  OVER(PARTITION BY MONTH(soh.OrderDate)) AS PercentileDiscreet,
+        COUNT(*) OVER(PARTITION by month(soh.OrderDate)) OrderCount 
+FROM AdventureWorks2019.Sales.SalesOrderHeader soh
+WHERE YEAR(soh.OrderDate) = 2013
+)
+SELECT DISTINCT mes, OrderCount, FORMAT(PercentileDiscreet, 'C') as Mediana,
+PERCENT_RANK() OVER(ORDER BY OrderCount) as "Percent Rank"
+FROM Aux3
